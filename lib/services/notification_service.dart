@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/notification_model.dart';
 
 class NotificationService {
   final _supabase = Supabase.instance.client;
@@ -13,13 +14,15 @@ class NotificationService {
     });
   }
 
-  Future<List<Map<String, dynamic>>> getNotifications(String userId) async {
+  Future<List<Notification>> getNotifications(String userId) async {
     final response = await _supabase
         .from('notifications')
         .select()
         .eq('user_id', userId)
         .order('created_at', ascending: false);
-    return List<Map<String, dynamic>>.from(response);
+    return List<Map<String, dynamic>>.from(response)
+        .map((data) => Notification.fromMap(data))
+        .toList();
   }
 
   Future<void> markAsRead(String notificationId) async {
@@ -27,5 +30,12 @@ class NotificationService {
         .from('notifications')
         .update({'read': true})
         .eq('id', notificationId);
+  }
+
+  Future<void> clearAllNotifications(String userId) async {
+    await _supabase
+        .from('notifications')
+        .delete()
+        .eq('user_id', userId);
   }
 } 
