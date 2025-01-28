@@ -24,6 +24,8 @@ import '../assignment/assignment_model.dart';
 import '../screens/class_details_screen.dart';
 import '../services/ai_service.dart';
 import '../screens/student_profile_screen.dart';
+import '../widgets/notification_dropdown.dart';
+import '../resources/student_course_materials_screen.dart';
 
 class StudentDashboard extends StatefulWidget {
   final String name;
@@ -62,6 +64,27 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
   bool _isAiLoading = false;
 
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+  final LayerLink _notificationLayerLink = LayerLink();
+  OverlayEntry? _notificationOverlay;
+
+  void _toggleNotificationDropdown() {
+    if (_notificationOverlay == null) {
+      _notificationOverlay = OverlayEntry(
+        builder: (context) => NotificationDropdown(
+          userId: 'student_id', // Replace with actual student ID
+          layerLink: _notificationLayerLink,
+          onClose: () {
+            _notificationOverlay?.remove();
+            _notificationOverlay = null;
+          },
+        ),
+      );
+      Overlay.of(context).insert(_notificationOverlay!);
+    } else {
+      _notificationOverlay?.remove();
+      _notificationOverlay = null;
+    }
+  }
 
   @override
   void initState() {
@@ -98,6 +121,7 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
   void dispose() {
     _animationController.dispose();
     _chatController.dispose();
+    _notificationOverlay?.remove();
     super.dispose();
   }
 
@@ -141,7 +165,7 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
                 if (!isSmallScreen) const SizedBox(width: 16),
                 Flexible(
                   child: Text(
-                    isSmallScreen ? 'EduGPT' : 'EducationGPT',
+                    isSmallScreen ? 'Lessons' : 'Lessons',
                     style: AppTheme.headingMedium.copyWith(
                       fontSize: isSmallScreen ? 24 : 28,
                       color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
@@ -164,60 +188,61 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
               ),
             ),
             actions: [
-              Container(
-                margin: EdgeInsets.symmetric(horizontal: isSmallScreen ? 4 : 8),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () {
-                      // TODO: Implement notifications view
-                    },
-                    child: Stack(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(isSmallScreen ? 8 : 12),
-                          decoration: BoxDecoration(
-                            color: isDarkMode ? Colors.white.withOpacity(0.1) : AppTheme.lightPrimaryColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            Icons.notifications_outlined,
-                            color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
-                            size: isSmallScreen ? 24 : 26,
-                          ),
-                        ),
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Container(
-                            padding: EdgeInsets.all(isSmallScreen ? 4 : 6),
+              CompositedTransformTarget(
+                link: _notificationLayerLink,
+                child: Container(
+                  margin: EdgeInsets.symmetric(horizontal: isSmallScreen ? 4 : 8),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: _toggleNotificationDropdown,
+                      child: Stack(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(isSmallScreen ? 8 : 12),
                             decoration: BoxDecoration(
-                              gradient: AppTheme.accentGradient,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: isDarkMode ? AppTheme.backgroundColor : AppTheme.lightBackgroundColor,
-                                width: 2,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppTheme.accentColor.withOpacity(0.3),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
+                              color: isDarkMode ? Colors.white.withOpacity(0.1) : AppTheme.lightPrimaryColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Text(
-                              '2',
-                              style: AppTheme.bodyLarge.copyWith(
-                                fontSize: isSmallScreen ? 10 : 12,
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
+                            child: Icon(
+                              Icons.notifications_outlined,
+                              color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
+                              size: isSmallScreen ? 24 : 26,
+                            ),
+                          ),
+                          Positioned(
+                            right: 0,
+                            top: 0,
+                            child: Container(
+                              padding: EdgeInsets.all(isSmallScreen ? 4 : 6),
+                              decoration: BoxDecoration(
+                                gradient: AppTheme.accentGradient,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: isDarkMode ? AppTheme.backgroundColor : AppTheme.lightBackgroundColor,
+                                  width: 2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppTheme.accentColor.withOpacity(0.3),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                '2',
+                                style: AppTheme.bodyLarge.copyWith(
+                                  fontSize: isSmallScreen ? 10 : 12,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -253,7 +278,7 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
           ),
         ),
         drawer: Drawer(
-          backgroundColor: isDarkMode ? AppTheme.backgroundColor : AppTheme.lightBackgroundColor,
+          backgroundColor: isDarkMode ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor,
           child: ListView(
             padding: EdgeInsets.zero,
             children: [
@@ -275,14 +300,14 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
                           MaterialPageRoute(
                             builder: (context) => StudentProfileScreen(
                               profile: StudentProfile(
-                                name: widget.name,
+                                name: 'Tanmay',
                                 rollNumber: 'CS21-001',
                                 department: 'Computer Science',
-                                email: 'student@university.edu',
-                                phoneNumber: '+1 234 567 8901',
+                                email: 'tanmay@university.com',
+                                phoneNumber: '+91 8554900871',
                                 semester: '4th',
-                                section: 'A',
-                                cgpa: 3.75,
+                                section: 'H',
+                                cgpa: 8.2,
                                 creditsCompleted: 60,
                                 enrolledCourses: [
                                   'Advanced Algorithms',
@@ -294,146 +319,156 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
                                 achievements: [
                                   'Dean\'s List - Fall 2023',
                                   'First Prize in Coding Competition',
-                                  'Best Project Award',
                                 ],
                                 attendance: {
-                                  'Advanced Algorithms': 85.5,
-                                  'Database Systems': 92.0,
-                                  'Software Engineering': 88.5,
-                                  'Computer Networks': 78.0,
-                                  'Machine Learning': 90.0,
+                                  'Advanced Algorithms': 85,
+                                  'Database Systems': 90,
+                                  'Software Engineering': 88,
+                                  'Computer Networks': 92,
+                                  'Machine Learning': 87,
                                 },
-                                guardianName: 'Mr. Robert Smith',
-                                guardianContact: '+1 234 567 8902',
+                                guardianName: 'Mr. Arnav',
+                                guardianContact: '+91 7754902231',
                               ),
                             ),
                           ),
                         );
                       },
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white,
-                            width: 2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 30,
+                            backgroundColor: Colors.white,
+                            child: Icon(
+                              Icons.person,
+                              size: 40,
+                              color: AppTheme.primaryColor,
                             ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.person_outline_rounded,
-                          size: 36,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Welcome back,',
-                      style: AppTheme.bodyLarge.copyWith(
-                        color: Colors.white70,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      widget.name,
-                      style: AppTheme.headingMedium.copyWith(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Tanmay',
+                                  style: AppTheme.headingMedium.copyWith(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                  ),
+                                ),
+                                Text(
+                                  'Student',
+                                  style: AppTheme.bodyMedium.copyWith(
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-              _buildDrawerItem(Icons.school_outlined, 'AI Tutor', () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => AITutorScreen()),
-                );
-              }),
-              _buildDrawerItem(Icons.quiz_outlined, 'Take a Quiz', () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => QuizTakingScreen(quizTitle: 'Sample Quiz'),
-                  ),
-                );
-              }),
-              _buildDrawerItem(Icons.note_outlined, 'Notes', () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => NoteTakingScreen()),
-                );
-              }),
-              _buildDrawerItem(Icons.people_outline, 'Community', () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => CommunityScreen()),
-                );
-              }),
-              _buildDrawerItem(Icons.emoji_events_outlined, 'Rewards', () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => RewardsScreen()),
-                );
-              }),
-              _buildDrawerItem(Icons.assessment_outlined, 'Results', () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ResultsScreen(
-                      marksheet: [
-                        Marksheet(
-                          subject: 'Mathematics',
-                          marksObtained: 60,
-                          totalMarks: 100,
-                          feedback: 'Needs improvement in calculus.',
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Column(
+                  children: [
+                    _buildDrawerItem(Icons.school_outlined, 'AI Tutor', () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => AITutorScreen()),
+                      );
+                    }),
+                    _buildDrawerItem(Icons.quiz_outlined, 'Take a Quiz', () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => QuizTakingScreen(quizTitle: 'Sample Quiz'),
                         ),
-                        Marksheet(
-                          subject: 'English',
-                          marksObtained: 70,
-                          totalMarks: 100,
-                          feedback: 'Good, but improve essay writing.',
+                      );
+                    }),
+                    _buildDrawerItem(Icons.note_outlined, 'Notes', () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => NoteTakingScreen()),
+                      );
+                    }),
+                    _buildDrawerItem(Icons.book_outlined, 'Course Materials', () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const StudentCourseMaterialsScreen()),
+                      );
+                    }),
+                    _buildDrawerItem(Icons.people_outline, 'Community', () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => CommunityScreen()),
+                      );
+                    }),
+                    _buildDrawerItem(Icons.emoji_events_outlined, 'Rewards', () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => RewardsScreen()),
+                      );
+                    }),
+                    _buildDrawerItem(Icons.assessment_outlined, 'Results', () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ResultsScreen(
+                            marksheet: [
+                              Marksheet(
+                                subject: 'Mathematics',
+                                marksObtained: 60,
+                                totalMarks: 100,
+                                feedback: 'Needs improvement in calculus.',
+                              ),
+                              Marksheet(
+                                subject: 'English',
+                                marksObtained: 70,
+                                totalMarks: 100,
+                                feedback: 'Good, but improve essay writing.',
+                              ),
+                              Marksheet(
+                                subject: 'Physics',
+                                marksObtained: 65,
+                                totalMarks: 100,
+                                feedback: 'Revise key concepts.',
+                              ),
+                            ],
+                          ),
                         ),
-                        Marksheet(
-                          subject: 'Physics',
-                          marksObtained: 65,
-                          totalMarks: 100,
-                          feedback: 'Revise key concepts.',
+                      );
+                    }),
+                    _buildDrawerItem(Icons.upload_file_outlined, 'Upload Assignment', () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => AssignmentUploadScreen(
+                            assignment: Assignment(
+                              id: DateTime.now().toString(),
+                              title: 'New Assignment',
+                              description: 'Please upload your assignment.',
+                              deadline: DateTime.now().add(const Duration(days: 7)),
+                              studentId: 'current_student_id',
+                              filePath: null,
+                              marks: null,
+                              feedback: null,
+                            ),
+                          ),
                         ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
-              _buildDrawerItem(Icons.upload_file_outlined, 'Upload Assignment', () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => AssignmentUploadScreen(
-                      assignment: Assignment(
-                        id: DateTime.now().toString(),
-                        title: 'New Assignment',
-                        description: 'Please upload your assignment.',
-                        deadline: DateTime.now().add(const Duration(days: 7)),
-                        studentId: 'current_student_id',
-                        filePath: null,
-                        marks: null,
-                        feedback: null,
-                      ),
-                    ),
-                  ),
-                );
-              }),
+                      );
+                    }),
+                    _buildDrawerItem(Icons.settings_outlined, 'Settings', () {
+                      Navigator.pushNamed(context, '/settings');
+                    }),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -673,21 +708,27 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
   }
 
   Widget _buildDrawerItem(IconData icon, String title, VoidCallback onTap) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDarkMode = themeProvider.isDarkMode;
+    final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
     
     return ListTile(
       leading: Icon(
         icon,
         color: isDarkMode ? Colors.white70 : AppTheme.lightPrimaryColor.withOpacity(0.7),
+        size: 24,
       ),
       title: Text(
         title,
         style: AppTheme.bodyLarge.copyWith(
           color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
+          fontWeight: FontWeight.w500,
         ),
       ),
       onTap: onTap,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      tileColor: Colors.transparent,
+      hoverColor: isDarkMode ? Colors.white.withOpacity(0.1) : AppTheme.lightPrimaryColor.withOpacity(0.1),
     );
   }
 

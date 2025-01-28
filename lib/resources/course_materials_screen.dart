@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:provider/provider.dart';
+import '../theme/theme_provider.dart';
+import '../theme/app_theme.dart';
 
 class CourseMaterialsScreen extends StatefulWidget {
+  const CourseMaterialsScreen({super.key});
+
   @override
   _CourseMaterialsScreenState createState() => _CourseMaterialsScreenState();
 }
@@ -26,6 +31,7 @@ class _CourseMaterialsScreenState extends State<CourseMaterialsScreen> {
             'name': fileName,
             'type': fileType,
             'uploadedAt': DateTime.now(),
+            'subject': 'Mathematics', // Add subject field - this should come from a dropdown or form
           });
         });
 
@@ -33,21 +39,18 @@ class _CourseMaterialsScreenState extends State<CourseMaterialsScreen> {
           SnackBar(
             content: Row(
               children: [
-                Icon(Icons.check_circle_rounded, color: Colors.white),
-                SizedBox(width: 12),
+                const Icon(Icons.check_circle_rounded, color: Colors.white),
+                const SizedBox(width: 12),
                 Text(
                   'File uploaded successfully',
-                  style: TextStyle(
-                    fontFamily: 'Montserrat',
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: AppTheme.bodyLarge.copyWith(color: Colors.white),
                 ),
               ],
             ),
-            backgroundColor: Color(0xFF6366F1),
+            backgroundColor: AppTheme.accentColor,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            margin: EdgeInsets.all(16),
+            margin: const EdgeInsets.all(16),
             elevation: 4,
           ),
         );
@@ -56,21 +59,18 @@ class _CourseMaterialsScreenState extends State<CourseMaterialsScreen> {
           SnackBar(
             content: Row(
               children: [
-                Icon(Icons.warning_rounded, color: Colors.white),
-                SizedBox(width: 12),
+                const Icon(Icons.warning_rounded, color: Colors.white),
+                const SizedBox(width: 12),
                 Text(
                   'No file selected',
-                  style: TextStyle(
-                    fontFamily: 'Montserrat',
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: AppTheme.bodyLarge.copyWith(color: Colors.white),
                 ),
               ],
             ),
             backgroundColor: Colors.red.shade900,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            margin: EdgeInsets.all(16),
+            margin: const EdgeInsets.all(16),
             elevation: 4,
           ),
         );
@@ -80,21 +80,18 @@ class _CourseMaterialsScreenState extends State<CourseMaterialsScreen> {
         SnackBar(
           content: Row(
             children: [
-              Icon(Icons.error_rounded, color: Colors.white),
-              SizedBox(width: 12),
+              const Icon(Icons.error_rounded, color: Colors.white),
+              const SizedBox(width: 12),
               Text(
                 'Failed to upload file: $e',
-                style: TextStyle(
-                  fontFamily: 'Montserrat',
-                  fontWeight: FontWeight.w500,
-                ),
+                style: AppTheme.bodyLarge.copyWith(color: Colors.white),
               ),
             ],
           ),
           backgroundColor: Colors.red.shade900,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          margin: EdgeInsets.all(16),
+          margin: const EdgeInsets.all(16),
           elevation: 4,
         ),
       );
@@ -110,21 +107,18 @@ class _CourseMaterialsScreenState extends State<CourseMaterialsScreen> {
       SnackBar(
         content: Row(
           children: [
-            Icon(Icons.check_circle_rounded, color: Colors.white),
-            SizedBox(width: 12),
+            const Icon(Icons.check_circle_rounded, color: Colors.white),
+            const SizedBox(width: 12),
             Text(
               'File deleted successfully',
-              style: TextStyle(
-                fontFamily: 'Montserrat',
-                fontWeight: FontWeight.w500,
-              ),
+              style: AppTheme.bodyLarge.copyWith(color: Colors.white),
             ),
           ],
         ),
-        backgroundColor: Color(0xFF6366F1),
+        backgroundColor: AppTheme.accentColor,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        margin: EdgeInsets.all(16),
+        margin: const EdgeInsets.all(16),
         elevation: 4,
       ),
     );
@@ -132,39 +126,34 @@ class _CourseMaterialsScreenState extends State<CourseMaterialsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDarkMode = themeProvider.isDarkMode;
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: Text(
           'Course Materials',
-          style: TextStyle(
-            fontFamily: 'Montserrat',
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
-            color: Colors.white,
+          style: AppTheme.headingLarge.copyWith(
+            color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
           ),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
           Container(
-            margin: EdgeInsets.only(right: 20),
+            margin: const EdgeInsets.only(right: 20),
             child: ElevatedButton.icon(
               onPressed: _uploadFile,
-              icon: Icon(Icons.add_rounded, color: Colors.white, size: 24),
+              icon: const Icon(Icons.add_rounded, color: Colors.white, size: 24),
               label: Text(
                 'Upload',
-                style: TextStyle(
-                  fontFamily: 'Montserrat',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
-                ),
+                style: AppTheme.buttonText,
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFF6366F1),
+                backgroundColor: AppTheme.accentColor,
                 foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
@@ -176,15 +165,7 @@ class _CourseMaterialsScreenState extends State<CourseMaterialsScreen> {
       ),
       body: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF0A0A1A),
-              Color(0xFF1A1F3C),
-              Color(0xFF0A0A1A),
-            ],
-          ),
+          gradient: isDarkMode ? AppTheme.backgroundGradient : AppTheme.lightBackgroundGradient,
         ),
         child: SafeArea(
           child: Padding(
@@ -194,15 +175,11 @@ class _CourseMaterialsScreenState extends State<CourseMaterialsScreen> {
               children: [
                 Text(
                   'Uploaded Materials',
-                  style: TextStyle(
-                    fontFamily: 'Montserrat',
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 0.5,
+                  style: AppTheme.headingMedium.copyWith(
+                    color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
                   ),
                 ),
-                SizedBox(height: 32),
+                const SizedBox(height: 32),
                 Expanded(
                   child: _courseMaterials.isEmpty
                       ? Center(
@@ -212,17 +189,13 @@ class _CourseMaterialsScreenState extends State<CourseMaterialsScreen> {
                               Icon(
                                 Icons.cloud_upload_rounded,
                                 size: 80,
-                                color: Colors.white.withOpacity(0.3),
+                                color: (isDarkMode ? Colors.white : AppTheme.lightPrimaryColor).withOpacity(0.3),
                               ),
-                              SizedBox(height: 24),
+                              const SizedBox(height: 24),
                               Text(
                                 'No materials uploaded yet',
-                                style: TextStyle(
-                                  fontFamily: 'Montserrat',
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.white.withOpacity(0.5),
-                                  letterSpacing: 0.5,
+                                style: AppTheme.bodyLarge.copyWith(
+                                  color: (isDarkMode ? Colors.white : AppTheme.lightPrimaryColor).withOpacity(0.5),
                                 ),
                               ),
                             ],
@@ -233,41 +206,41 @@ class _CourseMaterialsScreenState extends State<CourseMaterialsScreen> {
                           itemBuilder: (context, index) {
                             final material = _courseMaterials[index];
                             return Container(
-                              margin: EdgeInsets.only(bottom: 20),
+                              margin: const EdgeInsets.only(bottom: 20),
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                   colors: [
-                                    Colors.white.withOpacity(0.12),
-                                    Colors.white.withOpacity(0.06),
+                                    (isDarkMode ? Colors.white : AppTheme.lightPrimaryColor).withOpacity(0.12),
+                                    (isDarkMode ? Colors.white : AppTheme.lightPrimaryColor).withOpacity(0.06),
                                   ],
                                 ),
                                 borderRadius: BorderRadius.circular(24),
                                 border: Border.all(
-                                  color: Colors.white.withOpacity(0.15),
+                                  color: (isDarkMode ? Colors.white : AppTheme.lightPrimaryColor).withOpacity(0.15),
                                   width: 1,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withOpacity(0.2),
                                     blurRadius: 20,
-                                    offset: Offset(0, 10),
+                                    offset: const Offset(0, 10),
                                   ),
                                 ],
                               ),
                               child: ListTile(
-                                contentPadding: EdgeInsets.all(20),
+                                contentPadding: const EdgeInsets.all(20),
                                 leading: Container(
-                                  padding: EdgeInsets.all(16),
+                                  padding: const EdgeInsets.all(16),
                                   decoration: BoxDecoration(
-                                    color: Color(0xFF6366F1).withOpacity(0.2),
+                                    color: AppTheme.accentColor.withOpacity(0.2),
                                     borderRadius: BorderRadius.circular(16),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Color(0xFF6366F1).withOpacity(0.3),
+                                        color: AppTheme.accentColor.withOpacity(0.3),
                                         blurRadius: 12,
-                                        offset: Offset(0, 4),
+                                        offset: const Offset(0, 4),
                                       ),
                                     ],
                                   ),
@@ -278,30 +251,35 @@ class _CourseMaterialsScreenState extends State<CourseMaterialsScreen> {
                                                 material['type'] == 'mov'
                                             ? Icons.video_library_rounded
                                             : Icons.insert_drive_file_rounded,
-                                    color: Color(0xFF6366F1),
+                                    color: AppTheme.accentColor,
                                     size: 32,
                                   ),
                                 ),
                                 title: Text(
                                   material['name'],
-                                  style: TextStyle(
-                                    fontFamily: 'Montserrat',
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                    letterSpacing: 0.3,
+                                  style: AppTheme.bodyLarge.copyWith(
+                                    color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
                                   ),
                                 ),
                                 subtitle: Padding(
-                                  padding: EdgeInsets.only(top: 12),
-                                  child: Text(
-                                    'Uploaded: ${material['uploadedAt'].toString().split('.')[0]}',
-                                    style: TextStyle(
-                                      fontFamily: 'Montserrat',
-                                      color: Colors.white.withOpacity(0.7),
-                                      letterSpacing: 0.2,
-                                      fontSize: 14,
-                                    ),
+                                  padding: const EdgeInsets.only(top: 12),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Subject: ${material['subject']}',
+                                        style: AppTheme.bodyMedium.copyWith(
+                                          color: (isDarkMode ? Colors.white : AppTheme.lightPrimaryColor).withOpacity(0.7),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Uploaded: ${material['uploadedAt'].toString().split('.')[0]}',
+                                        style: AppTheme.bodyMedium.copyWith(
+                                          color: (isDarkMode ? Colors.white : AppTheme.lightPrimaryColor).withOpacity(0.7),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                                 trailing: IconButton(

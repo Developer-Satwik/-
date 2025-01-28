@@ -14,14 +14,14 @@ class NotificationService {
     });
   }
 
-  Future<List<Notification>> getNotifications(String userId) async {
+  Future<List<NotificationItem>> getNotifications(String userId) async {
     final response = await _supabase
         .from('notifications')
         .select()
         .eq('user_id', userId)
         .order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(response)
-        .map((data) => Notification.fromMap(data))
+        .map((data) => NotificationItem.fromMap(data))
         .toList();
   }
 

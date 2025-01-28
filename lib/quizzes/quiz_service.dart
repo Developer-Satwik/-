@@ -190,4 +190,49 @@ class QuizService {
       print('Error updating quiz: $e');
     }
   }
+
+  static Future<Map<String, dynamic>> generateQuestion(String topic, {String? description}) async {
+    try {
+      final prompt = '''
+Generate a unique and diverse multiple-choice question about $topic that hasn't been covered before.${description != null ? '\nAdditional context: $description' : ''}
+Ensure the question tests a different aspect or concept of the topic than previous questions.
+Format the response as JSON with the following structure:
+{
+  "question": "The question text",
+  "options": ["Option A", "Option B", "Option C", "Option D"],
+  "correctAnswer": 0 // Index of the correct answer (0-3)
+}
+Make sure the question is challenging but clear, and all options are plausible but only one is correct.
+''';
+
+      final content = [Content.text(prompt)];
+      final response = await _model.generateContent(content);
+      final jsonStr = response.text ?? '';
+      
+      if (jsonStr.isEmpty) {
+        throw Exception('Empty response from AI');
+      }
+      
+      // Parse the JSON response and validate its structure
+      final Map<String, dynamic> questionData = jsonDecode(jsonStr);
+      if (!_validateQuestionFormat(questionData)) {
+        throw Exception('Invalid question format received from AI');
+      }
+      
+      return questionData;
+    } catch (e) {
+      throw Exception('Failed to generate question: $e');
+    }
+  }
+
+  static bool _validateQuestionFormat(Map<String, dynamic> data) {
+    return data.containsKey('question') &&
+           data.containsKey('options') &&
+           data.containsKey('correctAnswer') &&
+           data['options'] is List &&
+           (data['options'] as List).length == 4 &&
+           data['correctAnswer'] is int &&
+           data['correctAnswer'] >= 0 &&
+           data['correctAnswer'] < 4;
+  }
 }

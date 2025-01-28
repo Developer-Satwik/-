@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../theme/theme_provider.dart';
+import '../theme/app_theme.dart';
 import 'assignment_model.dart';
 import 'assignment_service.dart';
+import 'dart:convert';
 
 class AssignmentMarksConfirmationScreen extends StatefulWidget {
   final Assignment assignment;
   final String aiOverview;
 
-  const AssignmentMarksConfirmationScreen({super.key, required this.assignment, required this.aiOverview});
+  const AssignmentMarksConfirmationScreen({
+    super.key, 
+    required this.assignment, 
+    required this.aiOverview,
+  });
 
   @override
   _AssignmentMarksConfirmationScreenState createState() => _AssignmentMarksConfirmationScreenState();
@@ -15,210 +23,284 @@ class AssignmentMarksConfirmationScreen extends StatefulWidget {
 class _AssignmentMarksConfirmationScreenState extends State<AssignmentMarksConfirmationScreen> {
   final TextEditingController _marksController = TextEditingController();
   final TextEditingController _feedbackController = TextEditingController();
+  bool _isEditing = false;
+  bool _isPublishing = false;
 
   @override
   void initState() {
     super.initState();
-    _feedbackController.text = widget.aiOverview;
+    try {
+      final analysis = json.decode(widget.aiOverview) as Map<String, dynamic>;
+      final StringBuffer feedback = StringBuffer();
+      
+      // Add total score
+      feedback.writeln('Total Score: ${analysis['total_score']}/100\n');
+      
+      // Add question breakdown
+      final questionBreakdown = analysis['evaluation']['question_breakdown'] as List;
+      feedback.writeln('Question-by-Question Breakdown:\n');
+      
+      for (int i = 0; i < questionBreakdown.length; i++) {
+        final question = questionBreakdown[i] as Map<String, dynamic>;
+        feedback.writeln('Question ${i + 1}:');
+        feedback.writeln('Marks: ${question['marks_awarded']}/${question['max_marks']}');
+        feedback.writeln('Feedback: ${question['feedback']}\n');
+      }
+      
+      // Add areas for improvement
+      feedback.writeln('\nAreas for Improvement:');
+      final improvements = analysis['areas_of_improvement'] as List;
+      for (var area in improvements) {
+        feedback.writeln('• $area');
+      }
+      
+      // Add overall feedback
+      feedback.writeln('\nOverall Feedback:');
+      feedback.writeln(analysis['overall_feedback']);
+      
+      setState(() {
+        _feedbackController.text = feedback.toString();
+        _marksController.text = analysis['total_score'].toString();
+      });
+    } catch (e) {
+      print('Error parsing evaluation: $e');
+      _feedbackController.text = 'Error displaying evaluation';
+      _marksController.text = '0';
+    }
   }
 
-  Future<void> _confirmAndUploadMarks() async {
-    if (_marksController.text.isEmpty || _feedbackController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please fill all fields.'),
-          backgroundColor: Colors.red.shade400,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
-      return;
-    }
+  @override
+  void dispose() {
+    _marksController.dispose();
+    _feedbackController.dispose();
+    super.dispose();
+  }
 
-    final updatedAssignment = Assignment(
-      id: widget.assignment.id,
-      title: widget.assignment.title,
-      description: widget.assignment.description,
-      deadline: widget.assignment.deadline,
-      studentId: widget.assignment.studentId,
-      filePath: widget.assignment.filePath,
-      marks: double.parse(_marksController.text),
-      feedback: _feedbackController.text,
-    );
+  Future<void> _publishMarks() async {
+    setState(() {
+      _isPublishing = true;
+    });
 
     try {
+      final updatedAssignment = Assignment(
+        id: widget.assignment.id,
+        title: widget.assignment.title,
+        description: widget.assignment.description,
+        deadline: widget.assignment.deadline,
+        studentId: widget.assignment.studentId,
+        filePath: widget.assignment.filePath,
+        marks: double.parse(_marksController.text),
+        feedback: _feedbackController.text,
+      );
+
       await AssignmentService.uploadAssignment(updatedAssignment);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Marks and feedback uploaded successfully!'),
-          backgroundColor: Colors.green.shade400,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
-      Navigator.pop(context);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Marks published successfully!'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+        Navigator.of(context).pop();
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Failed to upload marks and feedback. Please try again.'),
-          backgroundColor: Colors.red.shade400,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error publishing marks: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isPublishing = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDarkMode = themeProvider.isDarkMode;
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 600;
+
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: isDarkMode ? AppTheme.backgroundColor : AppTheme.lightBackgroundColor,
       appBar: AppBar(
-        title: const Text(
-          'Grade Assignment',
-          style: TextStyle(fontWeight: FontWeight.w600),
+        title: Text(
+          'Confirm Evaluation',
+          style: AppTheme.headingMedium.copyWith(
+            color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
+          ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        centerTitle: true,
-        iconTheme: IconThemeData(color: Colors.grey[800]),
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back_ios_rounded,
+            color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: _isEditing ? () {
+              setState(() {
+                _isEditing = false;
+              });
+            } : () {
+              setState(() {
+                _isEditing = true;
+              });
+            },
+            icon: Icon(
+              _isEditing ? Icons.check : Icons.edit,
+              color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
+            ),
+            label: Text(
+              _isEditing ? 'Done' : 'Edit',
+              style: AppTheme.bodyLarge.copyWith(
+                color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
+              ),
+            ),
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 20,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Grade',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[800],
-                      letterSpacing: 0.5,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: isDarkMode ? AppTheme.backgroundGradient : AppTheme.lightBackgroundGradient,
+        ),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: EdgeInsets.all(24),
+                decoration: isDarkMode ? AppTheme.glassDecoration : AppTheme.lightGlassDecoration,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Total Marks',
+                      style: AppTheme.headingMedium.copyWith(
+                        color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
+                        fontSize: isSmallScreen ? 20 : 24,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _marksController,
-                    decoration: InputDecoration(
-                      labelText: 'Enter Grade',
-                      labelStyle: TextStyle(color: Colors.grey[600]),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey[300]!),
+                    SizedBox(height: 16),
+                    TextField(
+                      controller: _marksController,
+                      enabled: _isEditing,
+                      keyboardType: TextInputType.number,
+                      style: AppTheme.bodyLarge.copyWith(
+                        color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
+                        fontSize: isSmallScreen ? 16 : 20,
+                        fontWeight: FontWeight.bold,
                       ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      decoration: InputDecoration(
+                        border: _isEditing ? OutlineInputBorder() : InputBorder.none,
+                        filled: _isEditing,
+                        fillColor: isDarkMode ? Colors.white10 : Colors.grey[100],
                       ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.blue[700]!, width: 2),
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[50],
                     ),
-                    keyboardType: TextInputType.number,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 20,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Feedback',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[800],
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _feedbackController,
-                    decoration: InputDecoration(
-                      labelText: 'Enter Feedback',
-                      labelStyle: TextStyle(color: Colors.grey[600]),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey[300]!),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey[300]!),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.blue[700]!, width: 2),
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[50],
-                    ),
-                    maxLines: 5,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 32),
-            Center(
-              child: ElevatedButton(
-                onPressed: _confirmAndUploadMarks,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
-                  backgroundColor: Colors.blue[700],
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  minimumSize: const Size(double.infinity, 60),
-                ),
-                child: const Text(
-                  'Submit Grade',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                  ),
+                  ],
                 ),
               ),
-            ),
-          ],
+              SizedBox(height: 24),
+              Container(
+                padding: EdgeInsets.all(24),
+                decoration: isDarkMode ? AppTheme.glassDecoration : AppTheme.lightGlassDecoration,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Evaluation Details',
+                      style: AppTheme.headingMedium.copyWith(
+                        color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
+                        fontSize: isSmallScreen ? 20 : 24,
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    TextField(
+                      controller: _feedbackController,
+                      enabled: _isEditing,
+                      maxLines: null,
+                      style: AppTheme.bodyLarge.copyWith(
+                        color: isDarkMode ? Colors.white70 : Colors.black87,
+                      ),
+                      decoration: InputDecoration(
+                        border: _isEditing ? OutlineInputBorder() : InputBorder.none,
+                        filled: _isEditing,
+                        fillColor: isDarkMode ? Colors.white10 : Colors.grey[100],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 32),
+              Container(
+                width: double.infinity,
+                height: isSmallScreen ? 48 : 56,
+                decoration: BoxDecoration(
+                  gradient: AppTheme.primaryGradient,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.primaryColor.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: ElevatedButton(
+                  onPressed: _isPublishing ? null : _publishMarks,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: _isPublishing
+                      ? SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.publish, color: Colors.white),
+                            SizedBox(width: 12),
+                            Text(
+                              'Publish Marks',
+                              style: AppTheme.buttonText.copyWith(
+                                color: Colors.white,
+                                fontSize: isSmallScreen ? 16 : 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

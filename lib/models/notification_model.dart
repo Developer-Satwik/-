@@ -1,4 +1,4 @@
-class Notification {
+class NotificationItem {
   final String id;
   final String userId;
   final String title;
@@ -6,7 +6,7 @@ class Notification {
   final DateTime createdAt;
   final bool read;
 
-  Notification({
+  NotificationItem({
     required this.id,
     required this.userId,
     required this.title,
@@ -15,8 +15,8 @@ class Notification {
     required this.read,
   });
 
-  factory Notification.fromMap(Map<String, dynamic> data) {
-    return Notification(
+  factory NotificationItem.fromMap(Map<String, dynamic> data) {
+    return NotificationItem(
       id: data['id'],
       userId: data['user_id'],
       title: data['title'],

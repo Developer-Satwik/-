@@ -25,23 +25,29 @@ class AppTheme {
     end: Alignment.bottomRight,
   );
 
-  static const backgroundGradient = LinearGradient(
-    colors: [Color(0xFF0A0E21), Color(0xFF1F1F30)],
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
+  static final backgroundGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Colors.black87,
+      Colors.black,
+    ],
   );
 
   // Light Theme Colors
-  static const lightPrimaryColor = Color(0xFF4A55A2);
+  static const lightPrimaryColor = Color(0xFF2196F3);
   static const lightSecondaryColor = Color(0xFF28965A);
-  static const lightAccentColor = Color(0xFFE94560);
+  static const lightAccentColor = Color(0xFF03A9F4);
   static const lightBackgroundColor = Color(0xFFF5F5F7);
   static const lightSurfaceColor = Color(0xFFFFFFFF);
 
-  static const lightBackgroundGradient = LinearGradient(
-    colors: [Color(0xFFF5F5F7), Color(0xFFE8E8E8)],
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
+  static final lightBackgroundGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Colors.white,
+      Colors.grey[100]!,
+    ],
   );
 
   // Glassmorphic Effects
@@ -96,25 +102,29 @@ class AppTheme {
   );
 
   // Responsive Typography
-  static TextStyle get headingLarge => GoogleFonts.poppins(
-    fontSize: 32,
-    fontWeight: FontWeight.bold,
-    letterSpacing: -0.5,
-    height: 1.2,
-  );
-
-  static TextStyle get headingMedium => GoogleFonts.poppins(
+  static final headingLarge = TextStyle(
     fontSize: 24,
-    fontWeight: FontWeight.w600,
-    letterSpacing: -0.3,
-    height: 1.3,
+    fontWeight: FontWeight.bold,
   );
 
-  static TextStyle get bodyLarge => GoogleFonts.inter(
+  static final headingMedium = TextStyle(
+    fontSize: 20,
+    fontWeight: FontWeight.bold,
+  );
+
+  static final bodyLarge = TextStyle(
     fontSize: 16,
+    fontWeight: FontWeight.normal,
+  );
+
+  static final bodyMedium = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.normal,
+  );
+
+  static TextStyle get bodySmall => GoogleFonts.inter(
+    fontSize: 12,
     fontWeight: FontWeight.w400,
-    letterSpacing: 0.1,
-    height: 1.5,
   );
 
   static TextStyle get buttonText => GoogleFonts.inter(

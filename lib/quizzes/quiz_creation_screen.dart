@@ -13,51 +13,136 @@ class QuizCreationScreen extends StatefulWidget {
 }
 
 class _QuizCreationScreenState extends State<QuizCreationScreen> {
-  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _topicController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
   List<Map<String, dynamic>> questions = [];
-  String _aiSuggestion = '';
   bool _isLoading = false;
+  bool _isGenerating = false;
 
-  void _addQuestion() {
-    setState(() {
-      questions.add({
-        'question': '',
-        'options': ['', '', '', ''],
-        'correctAnswer': 0,
-      });
-    });
-    _getAISuggestion();
-  }
-
-  void _getAISuggestion() async {
-    if (questions.isEmpty) return;
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    String prompt = 'Suggest improvements or additional questions for the following quiz:\n';
-    for (var question in questions) {
-      prompt += 'Question: ${question['question']}\n';
-      prompt += 'Options: ${question['options'].join(', ')}\n';
-      prompt += 'Correct Answer: ${question['correctAnswer']}\n\n';
+  Future<void> _generateQuestion() async {
+    if (_topicController.text.isEmpty) {
+      _showSnackBar('Please enter a topic for the quiz', isError: true);
+      return;
     }
 
+    setState(() {
+      _isGenerating = true;
+    });
+
     try {
-      String suggestion = await QuizService.getAISuggestion(prompt);
-      setState(() {
-        _aiSuggestion = suggestion;
-      });
-    } catch (e) {
-      if (mounted) {
-        _showSnackBar('Failed to get AI suggestion: $e', isError: true);
-      }
-    } finally {
-      if (mounted) {
+      final generatedQuestion = await QuizService.generateQuestion(
+        _topicController.text,
+        description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
+      );
+      
+      // Check for duplicates
+      if (!_isDuplicateQuestion(generatedQuestion)) {
         setState(() {
-          _isLoading = false;
+          questions.add(generatedQuestion);
         });
+        _showSnackBar('Question generated successfully!');
+      } else {
+        _showSnackBar('Similar question already exists. Generating another...', isError: true);
+        await _generateQuestion(); // Try again
       }
+    } catch (e) {
+      _showSnackBar('Failed to generate question: $e', isError: true);
+    } finally {
+      setState(() {
+        _isGenerating = false;
+      });
+    }
+  }
+
+  bool _isDuplicateQuestion(Map<String, dynamic> newQuestion) {
+    final newQuestionText = newQuestion['question'].toString().toLowerCase();
+    return questions.any((q) {
+      final existingQuestionText = q['question'].toString().toLowerCase();
+      // Check for high similarity (80% or more matching words)
+      final newWords = newQuestionText.split(' ').toSet();
+      final existingWords = existingQuestionText.split(' ').toSet();
+      final commonWords = newWords.intersection(existingWords).length;
+      final totalWords = newWords.length;
+      return commonWords / totalWords > 0.8;
+    });
+  }
+
+  Future<void> _editQuestion(int index) async {
+    final question = questions[index];
+    final TextEditingController questionController = TextEditingController(text: question['question']);
+    final List<TextEditingController> optionControllers = question['options']
+        .map<TextEditingController>((option) => TextEditingController(text: option))
+        .toList();
+    int correctAnswer = question['correctAnswer'];
+
+    final result = await showDialog<Map<String, dynamic>?>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Edit Question', style: AppTheme.headingMedium),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: questionController,
+                  decoration: InputDecoration(
+                    labelText: 'Question',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  maxLines: null,
+                ),
+                const SizedBox(height: 16),
+                ...List.generate(4, (i) {
+                  return Column(
+                    children: [
+                      Row(
+                        children: [
+                          Radio<int>(
+                            value: i,
+                            groupValue: correctAnswer,
+                            onChanged: (value) => correctAnswer = value!,
+                          ),
+                          Expanded(
+                            child: TextField(
+                              controller: optionControllers[i],
+                              decoration: InputDecoration(
+                                labelText: 'Option ${String.fromCharCode(65 + i)}',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  );
+                }),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancel', style: AppTheme.bodyMedium),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, {
+                'question': questionController.text,
+                'options': optionControllers.map((c) => c.text).toList(),
+                'correctAnswer': correctAnswer,
+              }),
+              child: Text('Save', style: AppTheme.buttonText),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != null) {
+      setState(() {
+        questions[index] = result;
+      });
     }
   }
 
@@ -66,23 +151,20 @@ class _QuizCreationScreenState extends State<QuizCreationScreen> {
       SnackBar(
         content: Text(
           message,
-          style: GoogleFonts.inter(
-            fontWeight: FontWeight.w500,
-            letterSpacing: 0.3,
-          ),
+          style: AppTheme.bodyLarge.copyWith(color: Colors.white),
         ),
-        backgroundColor: isError ? Colors.red.shade900.withOpacity(0.95) : Colors.green.shade900.withOpacity(0.95),
+        backgroundColor: isError ? Colors.red.shade900 : AppTheme.successColor,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: EdgeInsets.all(16),
-        elevation: 8,
+        margin: const EdgeInsets.all(16),
+        elevation: 4,
       ),
     );
   }
 
   void _saveQuiz() async {
-    if (_titleController.text.trim().isEmpty || questions.isEmpty) {
-      _showSnackBar('Please add a title and at least one question.', isError: true);
+    if (questions.isEmpty) {
+      _showSnackBar('Please generate at least one question', isError: true);
       return;
     }
 
@@ -90,16 +172,15 @@ class _QuizCreationScreenState extends State<QuizCreationScreen> {
       _isLoading = true;
     });
 
-    final quizData = {
-      'title': _titleController.text,
-      'questions': questions,
-      'created_at': DateTime.now().toIso8601String(),
-    };
-
     try {
-      await QuizService.saveQuiz(quizData);
+      await QuizService.saveQuiz({
+        'title': 'New Quiz',
+        'questions': questions,
+        'created_at': DateTime.now().toIso8601String(),
+      });
       if (mounted) {
         _showSnackBar('Quiz saved successfully!');
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -116,559 +197,246 @@ class _QuizCreationScreenState extends State<QuizCreationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
-    final isDesktop = screenSize.width > 1024;
-    final isTablet = screenSize.width > 600 && screenSize.width <= 1024;
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDarkMode = themeProvider.isDarkMode;
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 600;
     
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: _buildAppBar(isDesktop, isTablet),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: isDarkMode ? AppTheme.backgroundGradient : LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF1E293B),
-              Color(0xFF0F172A),
-              Color(0xFF0F172A),
-            ],
+      backgroundColor: isDarkMode ? AppTheme.backgroundColor : AppTheme.lightBackgroundColor,
+      appBar: AppBar(
+        title: Text(
+          'Create Quiz',
+          style: AppTheme.headingLarge.copyWith(
+            color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
           ),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back_ios_new,
+            color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: [
+          if (!_isLoading) IconButton(
+            icon: Icon(
+              Icons.save_outlined,
+              color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
+            ),
+            onPressed: _saveQuiz,
+          ),
+        ],
+      ),
+      body: Container(
+        height: screenSize.height,
+        decoration: BoxDecoration(
+          gradient: isDarkMode ? AppTheme.backgroundGradient : AppTheme.lightBackgroundGradient,
         ),
         child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              physics: BouncingScrollPhysics(),
-              child: Container(
-                constraints: BoxConstraints(
-                  maxWidth: isDesktop ? 1200 : (isTablet ? 800 : double.infinity),
-                ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
                 padding: EdgeInsets.symmetric(
-                  horizontal: isDesktop ? 48 : (isTablet ? 32 : 24),
-                  vertical: isDesktop ? 40 : (isTablet ? 32 : 24),
+                  horizontal: isSmallScreen ? 16 : constraints.maxWidth * 0.1,
+                  vertical: isSmallScreen ? 16 : 24,
                 ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildTitleField(isDesktop, isTablet),
-                    SizedBox(height: isDesktop ? 40 : (isTablet ? 32 : 28)),
-                    _buildQuestionsList(isDesktop, isTablet),
-                    SizedBox(height: isDesktop ? 40 : (isTablet ? 32 : 28)),
-                    _buildActionButtons(isDesktop, isTablet),
+                    // Topic Field for AI Generation
+                    TextField(
+                      controller: _topicController,
+                      style: AppTheme.bodyLarge.copyWith(
+                        color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Quiz Topic (for AI generation)',
+                        labelStyle: AppTheme.bodyLarge.copyWith(
+                          color: isDarkMode ? Colors.white70 : AppTheme.lightPrimaryColor.withOpacity(0.7),
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        prefixIcon: Icon(
+                          Icons.topic,
+                          color: isDarkMode ? Colors.white70 : AppTheme.lightPrimaryColor.withOpacity(0.7),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: constraints.maxHeight * 0.02),
+
+                    // Description Field (Optional)
+                    TextField(
+                      controller: _descriptionController,
+                      style: AppTheme.bodyLarge.copyWith(
+                        color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
+                      ),
+                      maxLines: 3,
+                      decoration: InputDecoration(
+                        labelText: 'Description (Optional)',
+                        hintText: 'Add specific details about the questions you want to generate',
+                        labelStyle: AppTheme.bodyLarge.copyWith(
+                          color: isDarkMode ? Colors.white70 : AppTheme.lightPrimaryColor.withOpacity(0.7),
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        prefixIcon: Icon(
+                          Icons.description,
+                          color: isDarkMode ? Colors.white70 : AppTheme.lightPrimaryColor.withOpacity(0.7),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: constraints.maxHeight * 0.03),
+
+                    // Generated Questions List
+                    if (questions.isNotEmpty) ...[
+                      Text(
+                        'Questions',
+                        style: AppTheme.headingMedium.copyWith(
+                          color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
+                        ),
+                      ),
+                      SizedBox(height: constraints.maxHeight * 0.02),
+                      
+                      ...questions.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final question = entry.value;
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          color: isDarkMode ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor,
+                          child: Padding(
+                            padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.accentColor.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        'Q${index + 1}',
+                                        style: AppTheme.bodyLarge.copyWith(
+                                          color: AppTheme.accentColor,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        question['question'],
+                                        style: AppTheme.bodyLarge.copyWith(
+                                          color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.edit,
+                                        color: AppTheme.accentColor,
+                                      ),
+                                      onPressed: () => _editQuestion(index),
+                                    ),
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.delete_outline,
+                                        color: Colors.red.shade400,
+                                      ),
+                                      onPressed: () {
+                                        setState(() {
+                                          questions.removeAt(index);
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: constraints.maxHeight * 0.015),
+                                ...List.generate(4, (optionIndex) {
+                                  final isCorrect = question['correctAnswer'] == optionIndex;
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: EdgeInsets.all(isSmallScreen ? 10 : 12),
+                                    decoration: BoxDecoration(
+                                      color: isCorrect
+                                          ? AppTheme.successColor.withOpacity(0.2)
+                                          : (isDarkMode ? Colors.white10 : Colors.black.withOpacity(0.05)),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: isCorrect
+                                            ? AppTheme.successColor
+                                            : Colors.transparent,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Text(
+                                          String.fromCharCode(65 + optionIndex),
+                                          style: AppTheme.bodyMedium.copyWith(
+                                            color: isDarkMode ? Colors.white70 : AppTheme.lightPrimaryColor.withOpacity(0.7),
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            question['options'][optionIndex],
+                                            style: AppTheme.bodyMedium.copyWith(
+                                              color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
+                                            ),
+                                          ),
+                                        ),
+                                        if (isCorrect) Icon(
+                                          Icons.check_circle,
+                                          color: AppTheme.successColor,
+                                          size: 20,
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                    
+                    // Add extra space at bottom to prevent FAB overlap
+                    SizedBox(height: isSmallScreen ? 80 : 100),
                   ],
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
       ),
-      floatingActionButton: AnimatedOpacity(
-        opacity: _isLoading ? 0.0 : 1.0,
-        duration: Duration(milliseconds: 200),
-        child: FloatingActionButton.extended(
-          onPressed: _addQuestion,
-          icon: Icon(Icons.add_circle_outline),
-          label: Text('Add Question'),
-          backgroundColor: isDarkMode ? AppTheme.accentColor : Colors.green.shade600,
-        ),
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar(bool isDesktop, bool isTablet) {
-    return AppBar(
-      title: Text(
-        'Create Quiz',
-        style: GoogleFonts.poppins(
-          fontSize: isDesktop ? 32 : (isTablet ? 28 : 24),
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-          letterSpacing: 0.5,
-        ),
-      ),
-      centerTitle: true,
-      backgroundColor: Colors.black.withOpacity(0.2),
-      elevation: 0,
-      leading: IconButton(
-        icon: Icon(Icons.arrow_back_ios_new, color: Colors.white),
-        onPressed: () => Navigator.pop(context),
-      ),
-      actions: [
-        IconButton(
-          icon: Icon(Icons.save_outlined, color: Colors.white),
-          onPressed: _saveQuiz,
-          tooltip: 'Save Quiz',
-        ),
-        SizedBox(width: 8),
-      ],
-    );
-  }
-
-  Widget _buildTitleField(bool isDesktop, bool isTablet) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.15),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: TextField(
-        controller: _titleController,
-        style: GoogleFonts.inter(
-          fontSize: isDesktop ? 22 : (isTablet ? 20 : 18),
-          color: Colors.white,
-          letterSpacing: 0.3,
-        ),
-        decoration: InputDecoration(
-          labelText: 'Quiz Title',
-          labelStyle: GoogleFonts.inter(
-            color: Colors.white70,
-            letterSpacing: 0.3,
-            fontSize: isDesktop ? 18 : (isTablet ? 16 : 14),
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(20),
-            borderSide: BorderSide.none,
-          ),
-          contentPadding: EdgeInsets.all(28),
-          prefixIcon: Container(
-            margin: EdgeInsets.all(12),
-            padding: EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              Icons.edit_outlined,
-              color: Colors.white70,
-              size: isDesktop ? 24 : (isTablet ? 22 : 20),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuestionsList(bool isDesktop, bool isTablet) {
-    return AnimatedSwitcher(
-      duration: Duration(milliseconds: 300),
-      child: _isLoading
-          ? Center(
-              child: Column(
-                children: [
-                  CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 3,
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'Processing...',
-                    style: GoogleFonts.inter(
-                      color: Colors.white70,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          : ListView(
-              shrinkWrap: true,
-              physics: NeverScrollableScrollPhysics(),
-              children: [
-                for (int i = 0; i < questions.length; i++) 
-                  _buildQuestionCard(i, isDesktop, isTablet),
-                if (_aiSuggestion.isNotEmpty)
-                  _buildAISuggestionCard(isDesktop, isTablet),
-              ],
-            ),
-    );
-  }
-
-  Widget _buildActionButtons(bool isDesktop, bool isTablet) {
-    return Container(
-      margin: EdgeInsets.only(top: 16),
-      child: Row(
-        children: [
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: _addQuestion,
-              icon: Icon(Icons.add_circle_outline),
-              label: Text(
-                'Add Question',
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5,
-                  fontSize: isDesktop ? 16 : (isTablet ? 15 : 14),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _isGenerating ? null : _generateQuestion,
+        backgroundColor: AppTheme.accentColor,
+        icon: _isGenerating
+            ? SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
                 ),
-              ),
-              style: ElevatedButton.styleFrom(
-                padding: EdgeInsets.symmetric(
-                  vertical: isDesktop ? 24 : (isTablet ? 20 : 18),
-                ),
-                backgroundColor: Colors.white.withOpacity(0.1),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(
-                    color: Colors.white.withOpacity(0.15),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          SizedBox(width: 20),
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: _saveQuiz,
-              icon: Icon(Icons.save_outlined),
-              label: Text(
-                'Save Quiz',
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5,
-                  fontSize: isDesktop ? 16 : (isTablet ? 15 : 14),
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                padding: EdgeInsets.symmetric(
-                  vertical: isDesktop ? 24 : (isTablet ? 20 : 18),
-                ),
-                backgroundColor: Colors.green.shade600,
-                elevation: 4,
-                shadowColor: Colors.green.shade900.withOpacity(0.4),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuestionCard(int index, bool isDesktop, bool isTablet) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 24),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.15),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(isDesktop ? 32 : (isTablet ? 28 : 24)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildQuestionHeader(index, isDesktop, isTablet),
-            SizedBox(height: 24),
-            _buildQuestionTextField(index, isDesktop),
-            SizedBox(height: 24),
-            ..._buildOptionFields(index, isDesktop),
-            SizedBox(height: 8),
-            _buildCorrectAnswerDropdown(index, isDesktop),
-            SizedBox(height: 16),
-            Align(
-              alignment: Alignment.centerRight,
-              child: IconButton(
-                icon: Icon(Icons.delete_outline, color: Colors.red.shade300),
-                onPressed: () {
-                  setState(() {
-                    questions.removeAt(index);
-                  });
-                  _getAISuggestion();
-                },
-                tooltip: 'Delete Question',
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuestionHeader(int index, bool isDesktop, bool isTablet) {
-    return Row(
-      children: [
-        Container(
-          padding: EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 4,
-                offset: Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Text(
-            '${index + 1}',
-            style: GoogleFonts.inter(
-              fontSize: isDesktop ? 20 : (isTablet ? 18 : 16),
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-        ),
-        SizedBox(width: 16),
-        Text(
-          'Question ${index + 1}',
-          style: GoogleFonts.poppins(
-            fontSize: isDesktop ? 24 : (isTablet ? 20 : 18),
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-            letterSpacing: 0.5,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildQuestionTextField(int index, bool isDesktop) {
-    return TextField(
-      decoration: InputDecoration(
-        hintText: 'Enter your question',
-        hintStyle: GoogleFonts.inter(
-          color: Colors.white38,
-          fontSize: isDesktop ? 16 : 14,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.15)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.15)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-        ),
-        filled: true,
-        fillColor: Colors.white.withOpacity(0.08),
-        contentPadding: EdgeInsets.all(20),
-      ),
-      style: GoogleFonts.inter(
-        fontSize: isDesktop ? 16 : 14,
-        color: Colors.white,
-        letterSpacing: 0.3,
-      ),
-      onChanged: (value) {
-        setState(() {
-          questions[index]['question'] = value;
-        });
-        _getAISuggestion();
-      },
-      maxLines: null,
-    );
-  }
-
-  List<Widget> _buildOptionFields(int index, bool isDesktop) {
-    return List.generate(4, (i) => [
-      TextField(
-        decoration: InputDecoration(
-          hintText: 'Option ${String.fromCharCode(65 + i)}',
-          hintStyle: GoogleFonts.inter(
-            color: Colors.white38,
-            fontSize: isDesktop ? 16 : 14,
-          ),
-          prefixIcon: Container(
-            margin: EdgeInsets.all(12),
-            padding: EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Text(
-              String.fromCharCode(65 + i),
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: Colors.white.withOpacity(0.15)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: Colors.white.withOpacity(0.15)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-          ),
-          filled: true,
-          fillColor: Colors.white.withOpacity(0.08),
-          contentPadding: EdgeInsets.all(20),
-        ),
-        style: GoogleFonts.inter(
-          fontSize: isDesktop ? 16 : 14,
-          color: Colors.white,
-          letterSpacing: 0.3,
-        ),
-        onChanged: (value) {
-          setState(() {
-            questions[index]['options'][i] = value;
-          });
-          _getAISuggestion();
-        },
-      ),
-      SizedBox(height: 16),
-    ]).expand((x) => x).toList();
-  }
-
-  Widget _buildCorrectAnswerDropdown(int index, bool isDesktop) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.15),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: DropdownButton<int>(
-        value: questions[index]['correctAnswer'],
-        isExpanded: true,
-        dropdownColor: Color(0xFF1E293B),
-        style: GoogleFonts.inter(
-          fontSize: isDesktop ? 16 : 14,
-          color: Colors.white,
-          letterSpacing: 0.3,
-        ),
-        icon: Icon(
-          Icons.arrow_drop_down_circle_outlined,
-          color: Colors.white70,
-        ),
-        underline: SizedBox(),
-        items: List.generate(
-          4,
-          (i) => DropdownMenuItem(
-            value: i,
-            child: Text(
-              'Correct Answer: Option ${String.fromCharCode(65 + i)}',
-              style: GoogleFonts.inter(
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ),
-        onChanged: (value) {
-          setState(() {
-            questions[index]['correctAnswer'] = value!;
-          });
-          _getAISuggestion();
-        },
-      ),
-    );
-  }
-
-  Widget _buildAISuggestionCard(bool isDesktop, bool isTablet) {
-    return Container(
-      margin: EdgeInsets.only(top: 24),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: Colors.amber.withOpacity(0.3),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(isDesktop ? 32 : (isTablet ? 28 : 24)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 4,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.lightbulb_outline,
-                    color: Colors.amber,
-                    size: isDesktop ? 24 : (isTablet ? 22 : 20),
-                  ),
-                ),
-                SizedBox(width: 16),
-                Text(
-                  'AI Suggestion',
-                  style: GoogleFonts.poppins(
-                    fontSize: isDesktop ? 24 : (isTablet ? 20 : 18),
-                    fontWeight: FontWeight.w600,
-                    color: Colors.amber,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 24),
-            Text(
-              _aiSuggestion,
-              style: GoogleFonts.inter(
-                fontSize: isDesktop ? 16 : 14,
-                color: Colors.white.withOpacity(0.9),
-                height: 1.6,
-                letterSpacing: 0.3,
-              ),
-            ),
-          ],
+              )
+            : const Icon(Icons.add),
+        label: Text(
+          _isGenerating ? 'Generating...' : 'Generate Question',
+          style: AppTheme.buttonText,
         ),
       ),
     );

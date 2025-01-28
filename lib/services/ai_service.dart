@@ -1,8 +1,10 @@
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AIService {
-  static const _apiKey = 'YOUR_API_KEY';  // Replace with your actual API key
+  static const _apiKey = 'AIzaSyC7EluuQmw1KB-hoVM4s6u3u7-vT7ezc7U';  // Replace with your actual API key
   static final _model = GenerativeModel(model: 'gemini-pro', apiKey: _apiKey);
+  static final _supabase = Supabase.instance.client;
 
   // Method to ask a question with optional context
   static Future<String> askQuestion(String question, {Map<String, dynamic>? context}) async {
@@ -90,6 +92,90 @@ class AIService {
       return response.text ?? 'No response generated';
     } catch (e) {
       return 'Error: Unable to generate response';
+    }
+  }
+
+  static Future<String> getAIResponse(String query, {Map<String, dynamic>? studentData}) async {
+    try {
+      // Prepare context about the student's data
+      String contextPrompt = '';
+      if (studentData != null) {
+        contextPrompt = '''
+Context about the student:
+- Upcoming Classes: ${studentData['upcoming_classes'] ?? 'No data'}
+- Pending Assignments: ${studentData['pending_assignments'] ?? 'No data'}
+- Recent Activities: ${studentData['recent_activities'] ?? 'No data'}
+- Academic Progress: ${studentData['academic_progress'] ?? 'No data'}
+
+Please provide a helpful response based on this student's context. For schedule-related queries, use the actual class times and assignments.
+''';
+      }
+
+      final prompt = '''
+$contextPrompt
+Student Query: $query
+
+Please provide a clear and concise response. If the query is about:
+- Schedule: Mention specific dates and times
+- Assignments: Include due dates and status
+- Academic Progress: Provide specific metrics and suggestions
+- General Topics: Give detailed explanations with examples
+
+Keep the tone friendly and encouraging.
+''';
+
+      final content = [Content.text(prompt)];
+      final response = await _model.generateContent(content);
+      return response.text ?? 'I apologize, but I couldn\'t generate a response at the moment.';
+    } catch (e) {
+      return 'I apologize, but I encountered an error: $e';
+    }
+  }
+
+  static Future<Map<String, dynamic>> fetchStudentData(String studentId) async {
+    try {
+      // Fetch upcoming classes
+      final classes = await _supabase
+          .from('class_schedules')
+          .select()
+          .eq('student_id', studentId)
+          .gte('class_date', DateTime.now().toIso8601String())
+          .order('class_date')
+          .limit(5);
+
+      // Fetch pending assignments
+      final assignments = await _supabase
+          .from('assignments')
+          .select()
+          .eq('student_id', studentId)
+          .eq('status', 'pending')
+          .order('due_date')
+          .limit(5);
+
+      // Fetch recent activities
+      final activities = await _supabase
+          .from('student_activities')
+          .select()
+          .eq('student_id', studentId)
+          .order('timestamp', ascending: false)
+          .limit(5);
+
+      // Fetch academic progress
+      final progress = await _supabase
+          .from('academic_progress')
+          .select()
+          .eq('student_id', studentId)
+          .single();
+
+      return {
+        'upcoming_classes': classes,
+        'pending_assignments': assignments,
+        'recent_activities': activities,
+        'academic_progress': progress,
+      };
+    } catch (e) {
+      print('Error fetching student data: $e');
+      return {};
     }
   }
 }

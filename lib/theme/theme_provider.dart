@@ -9,7 +9,7 @@ class ThemeProvider extends ChangeNotifier {
   bool _isScreenReaderEnabled = false;
   bool _isSoundEnabled = true;
   bool _isVibrationEnabled = true;
-
+  bool _isDarkMode = false;
   ThemeProvider() {
     _loadSettings();
   }
@@ -20,7 +20,6 @@ class ThemeProvider extends ChangeNotifier {
   bool get isScreenReaderEnabled => _isScreenReaderEnabled;
   bool get isSoundEnabled => _isSoundEnabled;
   bool get isVibrationEnabled => _isVibrationEnabled;
-
   bool get isDarkMode {
     if (_themeMode == ThemeMode.system) {
       final window = WidgetsBinding.instance.window;
@@ -37,6 +36,7 @@ class ThemeProvider extends ChangeNotifier {
     _isScreenReaderEnabled = prefs.getBool('isScreenReaderEnabled') ?? false;
     _isSoundEnabled = prefs.getBool('isSoundEnabled') ?? true;
     _isVibrationEnabled = prefs.getBool('isVibrationEnabled') ?? true;
+    _isDarkMode = prefs.getBool('isDarkMode') ?? false;
     notifyListeners();
   }
 
@@ -48,6 +48,7 @@ class ThemeProvider extends ChangeNotifier {
     await prefs.setBool('isScreenReaderEnabled', _isScreenReaderEnabled);
     await prefs.setBool('isSoundEnabled', _isSoundEnabled);
     await prefs.setBool('isVibrationEnabled', _isVibrationEnabled);
+    await prefs.setBool('isDarkMode', _isDarkMode);
   }
 
   void setThemeMode(ThemeMode mode) {
@@ -82,6 +83,12 @@ class ThemeProvider extends ChangeNotifier {
 
   void toggleVibration() {
     _isVibrationEnabled = !_isVibrationEnabled;
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void toggleTheme() {
+    _isDarkMode = !_isDarkMode;
     _saveSettings();
     notifyListeners();
   }

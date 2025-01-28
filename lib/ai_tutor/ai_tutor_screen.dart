@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import './ai_tutor_service.dart';
-import '../dashboard/student_dashboard.dart';
+import '../services/ai_service.dart';
+import '../theme/theme_provider.dart';
+import '../theme/app_theme.dart';
+import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AITutorScreen extends StatefulWidget {
   const AITutorScreen({super.key});
@@ -9,296 +12,332 @@ class AITutorScreen extends StatefulWidget {
   _AITutorScreenState createState() => _AITutorScreenState();
 }
 
-class _AITutorScreenState extends State<AITutorScreen> with SingleTickerProviderStateMixin {
-  final TextEditingController _controller = TextEditingController();
-  String _response = '';
+class _AITutorScreenState extends State<AITutorScreen> {
+  final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  final List<Map<String, dynamic>> _chatHistory = [];
   bool _isLoading = false;
-  bool _isDarkMode = false;
-
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
+  Map<String, dynamic> _studentData = {};
 
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
+    _loadStudentData();
+    _addSystemMessage('''
+Hello! I'm your AI tutor. I can help you with:
+- Checking your class schedule
+- Tracking assignments and due dates
+- Answering academic questions
+- Providing study tips and guidance
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeInOut,
-      ),
-    );
-
-    _animationController.forward();
+Feel free to ask me anything!
+''');
   }
 
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
-
-  void _askQuestion() async {
-    if (_controller.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Please enter a question.'),
-          backgroundColor: _isDarkMode ? Color(0xFF1E1E1E) : Color(0xFF2C3E50),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
-      return;
+  Future<void> _loadStudentData() async {
+    final studentId = Supabase.instance.client.auth.currentUser?.id;
+    if (studentId != null) {
+      final data = await AIService.fetchStudentData(studentId);
+      setState(() {
+        _studentData = data;
+      });
     }
+  }
+
+  void _addSystemMessage(String message) {
+    setState(() {
+      _chatHistory.add({
+        'role': 'system',
+        'message': message,
+      });
+    });
+  }
+
+  Future<void> _sendMessage() async {
+    final message = _messageController.text.trim();
+    if (message.isEmpty) return;
 
     setState(() {
+      _chatHistory.add({
+        'role': 'user',
+        'message': message,
+      });
       _isLoading = true;
-      _response = '';
     });
 
-    try {
-      String question = _controller.text;
-      String response = await AIService.askQuestion(question);
+    _messageController.clear();
+    _scrollToBottom();
 
-      setState(() {
-        _response = response;
-      });
+    try {
+      final response = await AIService.getAIResponse(message, studentData: _studentData);
+      
+      if (mounted) {
+        setState(() {
+          _chatHistory.add({
+            'role': 'assistant',
+            'message': response,
+          });
+          _isLoading = false;
+        });
+        _scrollToBottom();
+      }
     } catch (e) {
-      setState(() {
-        _response = 'Failed to get a response from the AI tutor.';
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red[700],
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _chatHistory.add({
+            'role': 'assistant',
+            'message': 'I apologize, but I encountered an error. Please try again.',
+          });
+          _isLoading = false;
+        });
+        _scrollToBottom();
+      }
     }
   }
 
-  void _toggleDarkMode() {
-    setState(() {
-      _isDarkMode = !_isDarkMode;
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      theme: _isDarkMode ? ThemeData.dark() : ThemeData.light(),
-      home: Scaffold(
-        appBar: AppBar(
-          title: Row(
-            children: [
-              Icon(
-                Icons.psychology,
-                color: _isDarkMode ? Color(0xFFE5B80B) : Color(0xFF1E3799),
-                size: 32,
-              ),
-              SizedBox(width: 12),
-              Text(
-                'AI Tutor',
-                style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.bold,
-                  color: _isDarkMode ? Color(0xFFE5B80B) : Color(0xFF1E3799),
-                  letterSpacing: 1.0,
-                ),
-              ),
-            ],
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDarkMode = themeProvider.isDarkMode;
+    final size = MediaQuery.of(context).size;
+    final isSmallScreen = size.width < 600;
+
+    return Scaffold(
+      backgroundColor: isDarkMode ? AppTheme.backgroundColor : AppTheme.lightBackgroundColor,
+      appBar: AppBar(
+        title: Text(
+          'AI Tutor',
+          style: AppTheme.headingLarge.copyWith(
+            color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
           ),
-          backgroundColor: _isDarkMode ? Color(0xFF1E1E1E) : Colors.white,
-          elevation: 4,
-          actions: [
-            IconButton(
-              icon: Icon(
-                _isDarkMode ? Icons.light_mode : Icons.dark_mode,
-                color: _isDarkMode ? Color(0xFFE5B80B) : Color(0xFF1E3799),
-                size: 28,
-              ),
-              onPressed: _toggleDarkMode,
-            ),
-            IconButton(
-              icon: Icon(
-                Icons.close,
-                color: _isDarkMode ? Color(0xFFE5B80B) : Color(0xFF1E3799),
-                size: 28,
-              ),
-              onPressed: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => StudentDashboard(name: 'John Doe'),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back_ios_new,
+            color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
+              itemCount: _chatHistory.length + (_isLoading ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == _chatHistory.length) {
+                  return _buildTypingIndicator();
+                }
+
+                final message = _chatHistory[index];
+                final isUser = message['role'] == 'user';
+                final isSystem = message['role'] == 'system';
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Row(
+                    mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+                    children: [
+                      if (!isUser) _buildAvatar(isSystem),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Container(
+                          padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+                          decoration: BoxDecoration(
+                            color: isUser
+                                ? AppTheme.accentColor
+                                : (isDarkMode ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            message['message'],
+                            style: AppTheme.bodyLarge.copyWith(
+                              color: isUser ? Colors.white : (isDarkMode ? Colors.white : AppTheme.lightPrimaryColor),
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (isUser) const SizedBox(width: 8),
+                      if (isUser) _buildAvatar(false),
+                    ],
                   ),
                 );
               },
             ),
-          ],
-        ),
-        body: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: _isDarkMode
-                  ? [Color(0xFF1E1E1E), Color(0xFF2C3E50)]
-                  : [Color(0xFFF8F9FD), Color(0xFFE8F0FE)],
-            ),
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
-            child: Column(
+          Container(
+            padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+            decoration: BoxDecoration(
+              color: isDarkMode ? AppTheme.surfaceColor : AppTheme.lightSurfaceColor,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: Row(
               children: [
-                FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _isDarkMode 
-                              ? Colors.black.withOpacity(0.5)
-                              : Colors.grey.withOpacity(0.2),
-                          blurRadius: 30,
-                          offset: Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: TextField(
-                      controller: _controller,
-                      decoration: InputDecoration(
-                        hintText: 'What would you like to learn today?',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide.none,
-                        ),
-                        filled: true,
-                        fillColor: _isDarkMode 
-                            ? Color(0xFF2C3E50).withOpacity(0.9)
-                            : Colors.white.withOpacity(0.9),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                        hintStyle: TextStyle(
-                          color: _isDarkMode ? Colors.grey[400] : Colors.grey[600],
-                          fontSize: 16,
-                        ),
-                        prefixIcon: Icon(
-                          Icons.lightbulb_outline,
-                          color: _isDarkMode ? Color(0xFFE5B80B) : Color(0xFF1E3799),
-                        ),
-                      ),
-                      maxLines: 3,
-                      minLines: 1,
-                      style: TextStyle(
-                        color: _isDarkMode ? Colors.white : Colors.black87,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(height: 24),
-                FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: Container(
-                    width: double.infinity,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      gradient: LinearGradient(
-                        colors: _isDarkMode
-                            ? [Color(0xFFE5B80B), Color(0xFFDAA520)]
-                            : [Color(0xFF1E3799), Color(0xFF4A69BD)],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _isDarkMode
-                              ? Color(0xFFE5B80B).withOpacity(0.3)
-                              : Color(0xFF1E3799).withOpacity(0.3),
-                          blurRadius: 12,
-                          offset: Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _askQuestion,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                      ),
-                      child: _isLoading
-                          ? SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Text(
-                              'Ask Now',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                letterSpacing: 1.0,
-                              ),
-                            ),
-                    ),
-                  ),
-                ),
-                SizedBox(height: 24),
                 Expanded(
-                  child: FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: _isDarkMode
-                            ? Color(0xFF2C3E50).withOpacity(0.9)
-                            : Colors.white.withOpacity(0.9),
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _isDarkMode
-                                ? Colors.black.withOpacity(0.5)
-                                : Colors.grey.withOpacity(0.2),
-                            blurRadius: 30,
-                            offset: Offset(0, 6),
-                          ),
-                        ],
+                  child: TextField(
+                    controller: _messageController,
+                    style: AppTheme.bodyLarge.copyWith(
+                      color: isDarkMode ? Colors.white : AppTheme.lightPrimaryColor,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Ask me anything...',
+                      hintStyle: AppTheme.bodyLarge.copyWith(
+                        color: isDarkMode ? Colors.white70 : AppTheme.lightPrimaryColor.withOpacity(0.7),
                       ),
-                      child: SingleChildScrollView(
-                        physics: BouncingScrollPhysics(),
-                        child: Text(
-                          _response.isEmpty
-                              ? "I'm here to help you learn. Ask me anything!"
-                              : _response,
-                          style: TextStyle(
-                            fontSize: 18,
-                            height: 1.6,
-                            color: _isDarkMode ? Colors.white : Colors.black87,
-                          ),
-                        ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: isDarkMode ? Colors.white10 : Colors.black.withOpacity(0.05),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: isSmallScreen ? 16 : 24,
+                        vertical: isSmallScreen ? 12 : 16,
                       ),
                     ),
+                    maxLines: null,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
                   ),
+                ),
+                const SizedBox(width: 12),
+                IconButton(
+                  onPressed: _isLoading ? null : _sendMessage,
+                  icon: Icon(
+                    Icons.send_rounded,
+                    color: _isLoading
+                        ? (isDarkMode ? Colors.white38 : AppTheme.lightPrimaryColor.withOpacity(0.38))
+                        : AppTheme.accentColor,
+                  ),
+                  padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
                 ),
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAvatar(bool isSystem) {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: isSystem ? AppTheme.accentColor : AppTheme.primaryColor,
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        isSystem ? Icons.school_rounded : Icons.person_rounded,
+        color: Colors.white,
+        size: 20,
+      ),
+    );
+  }
+
+  Widget _buildTypingIndicator() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          _buildAvatar(false),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Provider.of<ThemeProvider>(context).isDarkMode
+                  ? AppTheme.surfaceColor
+                  : AppTheme.lightSurfaceColor,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(3, (index) {
+                return Container(
+                  width: 8,
+                  height: 8,
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  decoration: BoxDecoration(
+                    color: AppTheme.accentColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const LoadingIndicator(),
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class LoadingIndicator extends StatefulWidget {
+  const LoadingIndicator({super.key});
+
+  @override
+  State<LoadingIndicator> createState() => _LoadingIndicatorState();
+}
+
+class _LoadingIndicatorState extends State<LoadingIndicator> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    )..repeat(reverse: true);
+    _animation = Tween(begin: 0.0, end: 1.0).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _animation,
+      child: Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(
+          color: AppTheme.accentColor,
+          shape: BoxShape.circle,
         ),
       ),
     );
