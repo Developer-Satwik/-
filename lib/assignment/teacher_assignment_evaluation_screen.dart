@@ -15,7 +15,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:flutter/services.dart';
 import 'package:flutter_tesseract_ocr/flutter_tesseract_ocr.dart';
-import 'dart:html' as html;  // Add this for web support
 
 class TeacherAssignmentEvaluationScreen extends StatefulWidget {
   const TeacherAssignmentEvaluationScreen({super.key});
